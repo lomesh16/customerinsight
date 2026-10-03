@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Customer Insight Generator</title>
+<style>
+:root{--bg:#f7f7f4;--card:#fff;--ink:#1c1c1a;--mute:#6b6b66;--line:#e3e3dd;--acc:#2f5bea;--pos:#1f9d62;--neg:#d64545;--neu:#9a9a93;
+box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#151514;--card:#201f1e;--ink:#eeeeea;--mute:#a1a19a;--line:#33322f;--acc:#7c9bff;--pos:#43c98a;--neg:#ef7070;--neu:#8a8a83}}
+:root[data-theme="dark"]{--bg:#151514;--card:#201f1e;--ink:#eeeeea;--mute:#a1a19a;--line:#33322f;--acc:#7c9bff;--pos:#43c98a;--neg:#ef7070;--neu:#8a8a83}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif}
+main{max-width:860px;margin:0 auto;padding:24px 16px 48px}
+h1{font-size:24px;margin:0 0 4px}h2{font-size:16px;margin:0 0 12px}
+.sub{color:var(--mute);margin:0 0 20px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px;margin-bottom:16px}
+textarea{width:100%;min-height:150px;background:var(--bg);color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:10px;font:inherit;resize:vertical}
+.row{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+button{font:inherit;border:1px solid var(--line);background:var(--card);color:var(--ink);padding:8px 14px;border-radius:8px;cursor:pointer}
+button.p{background:var(--acc);border-color:var(--acc);color:#fff}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px}
+.stat{border:1px solid var(--line);border-radius:10px;padding:10px}
+.stat b{display:block;font-size:22px}.stat span{color:var(--mute);font-size:13px}
+.bar{display:flex;height:10px;border-radius:5px;overflow:hidden;margin-top:12px;background:var(--line)}
+.ins{border-left:3px solid var(--acc);padding:6px 12px;margin:0 0 10px}
+.ins.neg{border-color:var(--neg)}.ins.pos{border-color:var(--pos)}
+.ins small{color:var(--mute);display:block}
+.scroll{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th,td{text-align:left;padding:8px;border-bottom:1px solid var(--line);white-space:nowrap}
+.chips span{display:inline-block;background:var(--bg);border:1px solid var(--line);border-radius:99px;padding:2px 10px;margin:0 6px 6px 0;font-size:13px}
+.hide{display:none}
+</style>
+</head>
+<body>
+<main>
+<h1>Customer Insight Generator</h1>
+<p class="sub">Paste customer feedback (reviews, survey answers, tickets), one per line. Get sentiment, themes and suggested actions. Runs entirely in your browser.</p>
+
+<div class="card">
+<textarea id="in" placeholder="Love the app, but checkout is confusing and slow...&#10;Support took 3 days to reply, really frustrating.&#10;Great value for the price!"></textarea>
+<div class="row">
+<button class="p" id="go">Generate insights</button>
+<button id="sample">Load sample</button>
+<button id="clr">Clear</button>
+</div>
+</div>
+
+<div id="out" class="hide">
+<div class="card"><h2>Overview</h2>
+<div class="stats" id="stats"></div><div class="bar" id="bar"></div></div>
+<div class="card"><h2>Key insights</h2><div id="ins"></div>
+<div class="row"><button id="copy">Copy insights</button></div></div>
+<div class="card"><h2>Themes</h2><div class="scroll"><table id="tbl"></table></div></div>
+<div class="card"><h2>Frequent words</h2><div class="chips" id="kw"></div></div>
+</div>
+</main>
+<script>
+const THEMES={
+"Pricing & value":["price","pricing","expensive","cheap","cost","value","fee","subscription","worth","overpriced","discount"],
+"Customer support":["support","service","agent","help","reply","response","ticket","staff","refund","representative"],
+"Product quality":["quality","broke","broken","defect","durable","reliable","bug","bugs","crash","crashes","faulty","build"],
+"Ease of use":["easy","confusing","intuitive","simple","complicated","usability","interface","navigate","checkout","setup","onboarding","design"],
+"Speed & performance":["slow","fast","lag","laggy","loading","speed","performance","quick","delay","delayed","wait"],
+"Delivery & shipping":["delivery","shipping","shipped","arrived","package","late","tracking","courier"],
+"Features":["feature","features","missing","integration","option","options","customize","wish","need","lack"]};
+const POS="love great good excellent amazing awesome helpful fast easy happy perfect best recommend fantastic smooth intuitive reliable friendly quick worth value satisfied wonderful nice".split(" ");
+const NEG="slow bad terrible awful poor frustrating confusing broken broke expensive overpriced worst disappointed disappointing late missing crash crashes bug bugs rude useless complicated difficult hard delay delayed unhelpful annoying faulty waste lag laggy".split(" ");
+const STOP=new Set("the a an and or but is it its i we you they to of in on for with this that was were are be been have has had my our your at as so very really just not no too from by me them can could would will than then there their also get got when what".split(" "));
+const SAMPLE=`Love the app, but checkout is confusing and slow.
+Support took 3 days to reply, really frustrating.
+Great value for the price, worth every penny.
+Delivery was late and tracking never updated.
+The new interface is intuitive and easy to use.
+App crashes every time I upload a photo. Terrible bug.
+Customer service agent was friendly and solved my issue fast.
+Too expensive compared to competitors, subscription price keeps going up.
+Wish there was an integration with my calendar, a key feature is missing.
+Fast loading and reliable, no complaints.
+Setup was complicated and the onboarding didn't help.
+Product quality is excellent, feels durable.`;
+const $=id=>document.getElementById(id);
+function words(t){return t.toLowerCase().replace(/[^a-z\s']/g," ").split(/\s+/).filter(Boolean)}
+function sent(w){let s=0;w.forEach((x,i)=>{const neg=i>0&&/^(not|no|never|isn't|wasn't|don't|didn't)$/.test(w[i-1]);
+ if(POS.includes(x))s+=neg?-1:1;else if(NEG.includes(x))s+=neg?1:-1});return s}
+function analyze(lines){
+ const th={};Object.keys(THEMES).forEach(k=>th[k]={n:0,pos:0,neg:0,ex:[]});
+ const freq={};let P=0,N=0,U=0;
+ lines.forEach(l=>{const w=words(l),s=sent(w);
+  s>0?P++:s<0?N++:U++;
+  new Set(w).forEach(x=>{if(x.length>3&&!STOP.has(x))freq[x]=(freq[x]||0)+1});
+  for(const k in THEMES){if(w.some(x=>THEMES[k].includes(x))){const t=th[k];t.n++;s>0?t.pos++:s<0&&t.neg++;if(t.ex.length<2&&s<=0)t.ex.push(l)}}});
+ return{th,P,N,U,total:lines.length,
+  kw:Object.entries(freq).filter(e=>e[1]>1).sort((a,b)=>b[1]-a[1]).slice(0,20)}}
+const ACTION={"Pricing & value":"Review pricing tiers and communicate value more clearly.","Customer support":"Reduce first-response time and add self-serve help.","Product quality":"Prioritise bug triage and quality checks on the top complaints.","Ease of use":"Run usability tests on the flows people mention and simplify them.","Speed & performance":"Profile and fix the slowest screens or steps.","Delivery & shipping":"Improve tracking updates and set honest delivery estimates.","Features":"Log requested features and validate demand for the most common ones."};
+function render(r){
+ const pct=n=>Math.round(n/r.total*100);
+ const net=pct(r.P)-pct(r.N);
+ $("stats").innerHTML=[["Responses",r.total],["Positive",pct(r.P)+"%"],["Neutral",pct(r.U)+"%"],["Negative",pct(r.N)+"%"],["Net sentiment",(net>0?"+":"")+net]].map(a=>`<div class="stat"><b>${a[1]}</b><span>${a[0]}</span></div>`).join("");
+ $("bar").innerHTML=`<div style="width:${pct(r.P)}%;background:var(--pos)"></div><div style="width:${pct(r.U)}%;background:var(--neu)"></div><div style="width:${pct(r.N)}%;background:var(--neg)"></div>`;
+ const ts=Object.entries(r.th).filter(e=>e[1].n).sort((a,b)=>b[1].n-a[1].n);
+ const out=[];
+ ts.forEach(([k,t])=>{const sh=pct(t.n),n=t.neg-t.pos;
+  if(n>0){out.push({c:"neg",h:`${k} is a pain point (${sh}% of feedback)`,d:`${t.neg} negative vs ${t.pos} positive mentions. Action: ${ACTION[k]}`+(t.ex[0]?`  Example: "${t.ex[0].slice(0,90)}"`:"")})}
+  else if(t.pos>t.neg){out.push({c:"pos",h:`${k} is a strength (${sh}% of feedback)`,d:`${t.pos} positive vs ${t.neg} negative mentions. Highlight it in marketing and protect it.`})}
+  else out.push({c:"",h:`${k} is mixed (${sh}% of feedback)`,d:`Opinions are split. Segment responses to see who is unhappy.`})});
+ if(net<0)out.unshift({c:"neg",h:"Overall sentiment is negative",d:"More customers are unhappy than happy. Address the top pain points below first."});
+ else if(net>20)out.unshift({c:"pos",h:"Overall sentiment is healthy",d:"Positive feedback clearly outweighs negative. Focus on the specific pain points to protect retention."});
+ if(!ts.length)out.push({c:"",h:"No clear themes found",d:"Try longer, more descriptive feedback."});
+ $("ins").innerHTML=out.map(o=>`<div class="ins ${o.c}"><b>${esc(o.h)}</b><small>${esc(o.d)}</small></div>`).join("");
+ $("tbl").innerHTML="<tr><th>Theme</th><th>Mentions</th><th>Positive</th><th>Negative</th></tr>"+ts.map(([k,t])=>`<tr><td>${k}</td><td>${t.n} (${pct(t.n)}%)</td><td>${t.pos}</td><td>${t.neg}</td></tr>`).join("");
+ $("kw").innerHTML=r.kw.map(([w,c])=>`<span>${esc(w)} · ${c}</span>`).join("")||"<span>Not enough repeated words</span>";
+ $("out").classList.remove("hide");window._txt=out.map(o=>"- "+o.h+": "+o.d).join("\n");
+}
+function esc(s){return s.replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]))}
+$("go").onclick=()=>{const l=$("in").value.split("\n").map(s=>s.trim()).filter(Boolean);if(!l.length){$("in").focus();return}render(analyze(l))};
+$("sample").onclick=()=>{$("in").value=SAMPLE;$("go").click()};
+$("clr").onclick=()=>{$("in").value="";$("out").classList.add("hide")};
+$("copy").onclick=()=>{const b=$("copy");try{navigator.clipboard.writeText(window._txt).then(()=>{b.textContent="Copied";setTimeout(()=>b.textContent="Copy insights",1500)})}catch(e){}};
+</script>
+</body>
+</html>
